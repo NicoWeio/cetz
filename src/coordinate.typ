@@ -125,37 +125,101 @@
 }
 
 #let resolve-tangent(resolve, ctx, c) = {
+  // Handle wrapped tangent coordinates like (tangent: (element: "c", point: (2, 1), solution: 1))
+  // or direct format like (element: "c", point: (2, 1), solution: 1)
+  let tangent-data = if "tangent" in c {
+    c.tangent
+  } else {
+    c
+  }
+  
   // (element: <string>, point: <coordinate>, solution: <integer>)
 
-  // https://stackoverflow.com/a/69641745/7142815
-  let C = resolve-anchor(ctx, c.element)
-  let (ctx, P) = resolve(ctx, c.point, update: false)
-  // Radius
-  let r = vector.len(vector.sub(resolve-anchor(ctx, c.element + ".north"), C))
-  // Vector between C and P
-  let D = vector.sub(P, C) // C - P
-  // Distance between C and P
-  let pc = vector.len(D)
-  if pc < r {
-    panic("No tangent solution for element " + c.element + " and point " + repr(c.point))
-  }
-  // Distance between P and X0
-  let d = r*r / pc
-  // Distance between X0 and X1(X2)
-  let h = calc.sqrt(r*r - d*d)
+  let C = resolve-anchor(ctx, tangent-data.element)
+  let (ctx, P) = resolve(ctx, tangent-data.point, update: false)
+  
+  // Get both radii to handle ellipses properly
+  let ry = vector.len(vector.sub(resolve-anchor(ctx, tangent-data.element + ".north"), C))
+  let rx = vector.len(vector.sub(resolve-anchor(ctx, tangent-data.element + ".east"), C))
+  
+  // Check if it's a circle (rx == ry) or an ellipse (rx != ry)
+  let is-circle = calc.abs(rx - ry) < util.float-epsilon
+  
+  if is-circle {
+    // Original circle tangent algorithm
+    // https://stackoverflow.com/a/69641745/7142815
+    let r = ry  // Use either radius for circle
+    let D = vector.sub(P, C)
+    let pc = vector.len(D)
+    if pc < r {
+      panic("No tangent solution for element " + tangent-data.element + " and point " + repr(tangent-data.point))
+    }
+    let d = r*r / pc
+    let h = calc.sqrt(r*r - d*d)
 
-  return if c.solution == 1 {
-    (
-      C.at(0) + (D.at(0) * d - D.at(1) * h) / pc,
-      C.at(1) + (D.at(1) * d + D.at(0) * h) / pc,
-      0
-    )
+    return if tangent-data.solution == 1 {
+      (
+        C.at(0) + (D.at(0) * d - D.at(1) * h) / pc,
+        C.at(1) + (D.at(1) * d + D.at(0) * h) / pc,
+        0
+      )
+    } else {
+      (
+        C.at(0) + (D.at(0) * d + D.at(1) * h) / pc,
+        C.at(1) + (D.at(1) * d - D.at(0) * h) / pc,
+        0
+      )
+    }
   } else {
-    (
-      C.at(0) + (D.at(0) * d + D.at(1) * h) / pc,
-      C.at(1) + (D.at(1) * d - D.at(0) * h) / pc,
-      0
-    )
+    // Ellipse tangent using the standard mathematical formula
+    // For ellipse x²/a² + y²/b² = 1 and external point (h, k)
+    // The equation of chord of contact (which gives tangent points) is: hx/a² + ky/b² = 1
+    
+    let px = P.at(0) - C.at(0)  // h in standard notation
+    let py = P.at(1) - C.at(1)  // k in standard notation
+    
+    let a = rx  
+    let b = ry  
+    
+    // Check if point is outside ellipse
+    let ellipse-test = (px * px) / (a * a) + (py * py) / (b * b)
+    if ellipse-test <= 1 + util.float-epsilon {
+      panic("No tangent solution for element " + tangent-data.element + " and point " + repr(tangent-data.point) + " (point must be outside ellipse)")
+    }
+    
+    // The tangent lines from (px, py) to the ellipse can be found by
+    // solving the system: hx/a² + ky/b² = 1 and x²/a² + y²/b² = 1
+    
+    // From the first equation: x = (a²/px)(1 - py*y/b²)
+    // Substitute into ellipse equation: [(a²/px)(1 - py*y/b²)]²/a² + y²/b² = 1
+    // Simplify: (a²/px²)(1 - py*y/b²)² + y²/b² = 1
+    // (a²/px²)(1 - 2*py*y/b² + (py*y/b²)²) + y²/b² = 1
+    // (a²/px²) - 2*a²*py*y/(px²*b²) + a²*py²*y²/(px²*b⁴) + y²/b² = 1
+    
+    // Rearranging: y²[a²*py²/(px²*b⁴) + 1/b²] - y[2*a²*py/(px²*b²)] + [a²/px² - 1] = 0
+    
+    let A_y = a*a*py*py/(px*px*b*b*b*b) + 1/(b*b)
+    let B_y = -2*a*a*py/(px*px*b*b)
+    let C_y = a*a/(px*px) - 1
+    
+    let discriminant_y = B_y*B_y - 4*A_y*C_y
+    if discriminant_y < 0 {
+      panic("No real tangent solution for element " + tangent-data.element + " and point " + repr(tangent-data.point))
+    }
+    
+    let sqrt_disc_y = calc.sqrt(discriminant_y)
+    let y1 = (-B_y + sqrt_disc_y) / (2 * A_y)
+    let y2 = (-B_y - sqrt_disc_y) / (2 * A_y)
+    
+    // For each y, calculate corresponding x using: x = (a²/px)(1 - py*y/b²)
+    let x1 = (a*a/px) * (1 - py*y1/(b*b))
+    let x2 = (a*a/px) * (1 - py*y2/(b*b))
+    
+    // Choose the appropriate solution
+    let (tx, ty) = if tangent-data.solution == 1 { (x1, y1) } else { (x2, y2) }
+    
+    // Transform back to original coordinate system
+    return (C.at(0) + tx, C.at(1) + ty, 0)
   }
 }
 
@@ -264,6 +328,9 @@
     } else if len in (1, 2) and keys.all(k => k in ("name", "anchor")) {
       "anchor"
     } else if len == 3 and keys.all(k => k in ("element", "point", "solution")) {
+      "tangent"
+    } else if len == 1 and keys == ("tangent",) {
+      // Handle wrapped tangent coordinates like (tangent: (element: "c", point: (2, 1), solution: 1))
       "tangent"
     } else if len == 2 and keys.all(k => k in ("horizontal", "vertical")) {
       "perpendicular"

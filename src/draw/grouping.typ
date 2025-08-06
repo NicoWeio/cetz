@@ -10,7 +10,7 @@
 #import "/src/anchor.typ" as anchor_
 #import "/src/matrix.typ"
 #import "/src/deps.typ"
-#import "../deps.typ": strfmt
+#import deps.oxifmt: strfmt
 
 #import "transformations.typ": move-to
 

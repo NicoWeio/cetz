@@ -3,7 +3,7 @@
 #import "vector.typ"
 #import "bezier.typ"
 #import "deps.typ"
-#import "deps.typ": strfmt
+#import deps.oxifmt: strfmt
 
 // A path is an array of subpaths.
 // A subpath is a triplet of the form:

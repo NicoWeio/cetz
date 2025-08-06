@@ -1,5 +1,5 @@
-#import "../../src/lib.typ" as cetz
-#import "../helper.typ": *
+#import "/src/lib.typ" as cetz
+#import "/tests/helper.typ": *
 
 #test-case({
   import cetz.draw: *

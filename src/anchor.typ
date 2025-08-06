@@ -1,5 +1,5 @@
 #import "deps.typ"
-#import "deps.typ": strfmt
+#import deps.oxifmt: strfmt
 
 #import "util.typ"
 #import "intersection.typ"

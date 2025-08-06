@@ -1,7 +1,7 @@
 #import "vector.typ"
 #import "util.typ"
 #import "deps.typ"
-#import "deps.typ": strfmt
+#import deps.oxifmt: strfmt
 
 #let resolve-xyz(c) = {
   // (x: <number> or <none>, y: <number> or <none>, z: <number> or <none>)
@@ -171,15 +171,15 @@
       )
     }
   } else {
-    // Ellipse tangent algorithm
-    // Transform to standard form where ellipse is centered at origin
-    let px = P.at(0) - C.at(0)
-    let py = P.at(1) - C.at(1)
+    // Ellipse tangent using the standard mathematical formula
+    // For ellipse x²/a² + y²/b² = 1 and external point (h, k)
+    // The equation of chord of contact (which gives tangent points) is: hx/a² + ky/b² = 1
     
-    // For ellipse x²/a² + y²/b² = 1 and external point (px, py),
-    // we need to find tangent points
-    let a = rx  // semi-major/minor axis in x direction
-    let b = ry  // semi-major/minor axis in y direction
+    let px = P.at(0) - C.at(0)  // h in standard notation
+    let py = P.at(1) - C.at(1)  // k in standard notation
+    
+    let a = rx  
+    let b = ry  
     
     // Check if point is outside ellipse
     let ellipse-test = (px * px) / (a * a) + (py * py) / (b * b)
@@ -187,33 +187,33 @@
       panic("No tangent solution for element " + tangent-data.element + " and point " + repr(tangent-data.point) + " (point must be outside ellipse)")
     }
     
-    // Use the pole-polar relationship for ellipse tangents
-    // The tangent from external point (px, py) to ellipse x²/a² + y²/b² = 1
-    // can be found by solving: T ≡ px*x/a² + py*y/b² = 1
+    // The tangent lines from (px, py) to the ellipse can be found by
+    // solving the system: hx/a² + ky/b² = 1 and x²/a² + y²/b² = 1
     
-    // For the intersection of this polar line with the ellipse, we substitute
-    // into the ellipse equation. This gives us a quadratic in terms of one variable.
+    // From the first equation: x = (a²/px)(1 - py*y/b²)
+    // Substitute into ellipse equation: [(a²/px)(1 - py*y/b²)]²/a² + y²/b² = 1
+    // Simplify: (a²/px²)(1 - py*y/b²)² + y²/b² = 1
+    // (a²/px²)(1 - 2*py*y/b² + (py*y/b²)²) + y²/b² = 1
+    // (a²/px²) - 2*a²*py*y/(px²*b²) + a²*py²*y²/(px²*b⁴) + y²/b² = 1
     
-    // Solve for tangent points using the discriminant method
-    // Rearranging: x = (a²/px)(1 - py*y/b²)
-    // Substituting into ellipse equation and solving for y:
+    // Rearranging: y²[a²*py²/(px²*b⁴) + 1/b²] - y[2*a²*py/(px²*b²)] + [a²/px² - 1] = 0
     
-    let A = b * b * px * px + a * a * py * py
-    let B = -2 * a * a * py
-    let C_val = a * a * (py * py - b * b)
+    let A_y = a*a*py*py/(px*px*b*b*b*b) + 1/(b*b)
+    let B_y = -2*a*a*py/(px*px*b*b)
+    let C_y = a*a/(px*px) - 1
     
-    let discriminant = B * B - 4 * A * C_val
-    if discriminant < 0 {
+    let discriminant_y = B_y*B_y - 4*A_y*C_y
+    if discriminant_y < 0 {
       panic("No real tangent solution for element " + tangent-data.element + " and point " + repr(tangent-data.point))
     }
     
-    let sqrt_disc = calc.sqrt(discriminant)
-    let y1 = (-B + sqrt_disc) / (2 * A)
-    let y2 = (-B - sqrt_disc) / (2 * A)
+    let sqrt_disc_y = calc.sqrt(discriminant_y)
+    let y1 = (-B_y + sqrt_disc_y) / (2 * A_y)
+    let y2 = (-B_y - sqrt_disc_y) / (2 * A_y)
     
-    // Calculate corresponding x coordinates using the polar line equation
-    let x1 = (a * a / px) * (1 - py * y1 / (b * b))
-    let x2 = (a * a / px) * (1 - py * y2 / (b * b))
+    // For each y, calculate corresponding x using: x = (a²/px)(1 - py*y/b²)
+    let x1 = (a*a/px) * (1 - py*y1/(b*b))
+    let x2 = (a*a/px) * (1 - py*y2/(b*b))
     
     // Choose the appropriate solution
     let (tx, ty) = if tangent-data.solution == 1 { (x1, y1) } else { (x2, y2) }
